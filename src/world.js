@@ -1084,20 +1084,31 @@ export class World {
     const want = this.state === 'play' ? this.targetShards() : 0;
     while (this.shards.length < want) {
       const a = this.arena;
-      let guard = 0;
-      while (guard++ < 40) {
-        const x = rand(a.x + 50, a.x + a.w - 50);
-        const y = rand(a.y + 50, a.y + a.h - 50);
-        if (dist(x, y, p.x, p.y) < 190 * S) continue;
-        let ok = true;
-        for (const s of this.stars) if (dist(x, y, s.x, s.y) < s.orbitR + 70 * S) ok = false;
-        for (const o of this.shards) if (dist(x, y, o.x, o.y) < 110 * S) ok = false;
-        for (const m of this.motes) if (dist(x, y, m.x, m.y) < 26 * S) ok = false;
-        if (!ok) continue;
-        this.shards.push(this.makeShard(x, y));
-        break;
+      // Try the fair keep-out zones first, then relax them. On a small phone
+      // with five stars and six shards there may be no spot that satisfies the
+      // ideal spacing at all, and silently spawning nothing would mean the
+      // game just stops getting harder.
+      let placed = null;
+      for (let tier = 0; tier < 4 && !placed; tier++) {
+        const relax = tier * 0.36;
+        const playerGap = 210 * S * (1 - relax * 0.45);
+        const starGap = 104 * S * (1 - relax * 0.5);
+        const shardGap = 128 * S * (1 - relax * 0.55);
+        for (let guard = 0; guard < 28; guard++) {
+          const x = rand(a.x + 48, a.x + a.w - 48);
+          const y = rand(a.y + 48, a.y + a.h - 48);
+          if (dist(x, y, p.x, p.y) < playerGap) continue;
+          let ok = true;
+          for (const s of this.stars) if (dist(x, y, s.x, s.y) < s.orbitR + starGap) ok = false;
+          for (const o of this.shards) if (dist(x, y, o.x, o.y) < shardGap) ok = false;
+          for (const m of this.motes) if (dist(x, y, m.x, m.y) < 22 * S) ok = false;
+          if (!ok) continue;
+          placed = { x, y };
+          break;
+        }
       }
-      if (guard >= 40) break;
+      if (!placed) break;
+      this.shards.push(this.makeShard(placed.x, placed.y));
     }
     while (this.shards.length > want) this.shards.pop();
 
@@ -1135,9 +1146,13 @@ export class World {
       if (d < s.r + 46 * S) {
         if (!s.near) {
           s.near = true;
-          if (p.mode === 'fly' && this.started) {
-            this.addScore(15 * this.mult(), p.x, p.y - 18 * S, C.violet, 'CLOSE', 13);
-            this.chroma = Math.min(1, this.chroma + 0.5);
+          s.closed = false;
+          if (p.mode === 'fly' && this.started && !s.closed) {
+            s.closed = true;
+            this.closeChain = (this.closeChain || 0) + 1;
+            const v = 15 * this.mult();
+            this.addScore(v, p.x, p.y - 18 * S, C.violet, 'CLOSE +' + v, 13);
+            this.chroma = Math.min(1, this.chroma + 0.4);
             Audio.sfx('near');
           }
         }

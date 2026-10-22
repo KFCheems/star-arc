@@ -202,7 +202,7 @@ export function boot() {
 
   requestAnimationFrame(frame);
 
-  const api = { world, renderer, ui, sys, ctx };
+  const api = { world, renderer, ui, sys, ctx, audio: Audio };
   if (typeof window !== 'undefined') window.__GAME__ = api;
   return api;
 }

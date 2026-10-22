@@ -697,6 +697,11 @@ export class Renderer {
     // rings
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    // clip to the field: shockwaves are part of the board, not the void
+    const a = world.arena;
+    ctx.beginPath();
+    roundRect(ctx, a.x, a.y, a.w, a.h, CFG.corner * world.S);
+    ctx.clip();
     for (const r of world.rings) {
       const k = clamp(r.life / r.maxLife, 0, 1);
       ctx.beginPath();
