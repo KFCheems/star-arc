@@ -1,7 +1,7 @@
 // 星弧 STAR ARC — tuning constants. Everything the feel depends on lives here.
 export const CFG = {
   // --- orbit ------------------------------------------------------------
-  orbitOmega: 6.05, // rad/s, constant so release timing is predictable
+  orbitOmega: 5.2, // rad/s — a 60° arc is a ~0.20s window at this speed
   captureRadius: 96, // px you can grab a star from
   orbitMin: 46,
   orbitMax: 88,

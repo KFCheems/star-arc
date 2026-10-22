@@ -34,7 +34,7 @@ import { C } from './palette.js';
 import { Audio } from './audio.js';
 import { vibrate } from './platform.js';
 
-const ORBIT_OMEGA = 5.2;
+const ORBIT_OMEGA = CFG.orbitOmega;
 
 export class World {
   constructor(sys) {
