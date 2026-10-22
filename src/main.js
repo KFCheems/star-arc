@@ -1,5 +1,5 @@
 // 星弧 STAR ARC — main loop.
-import { initCanvas, initInput, onPointer, getSystem, setPreferredFPS, keepAwake, bindShare, isMini, hideLoading, primaryPointer, now } from './platform.js';
+import { initCanvas, initInput, onPointer, getSystem, setPreferredFPS, keepAwake, bindShare, isMini, hideLoading, primaryPointer, now, HOST } from './platform.js';
 import { World } from './world.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
@@ -181,7 +181,7 @@ export function boot() {
 
   requestAnimationFrame(frame);
 
-  const api = { world, renderer, ui, sys, ctx, audio: Audio };
+  const api = { world, renderer, ui, sys, ctx, audio: Audio, host: HOST, isMini };
   if (typeof window !== 'undefined') window.__GAME__ = api;
   return api;
 }

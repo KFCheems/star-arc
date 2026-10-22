@@ -10,7 +10,9 @@
     "serve": "node build.mjs && node tools/serve.mjs",
     "shots": "node tools/shoot.mjs",
     "store": "node tools/store-shots.mjs",
-    "art": "node tools/art.mjs"
+    "art": "node tools/art.mjs",
+    "test": "node tools/shoot.mjs && node tools/mini-smoke.mjs wechat && node tools/mini-smoke.mjs douyin",
+    "test:mini": "node tools/mini-smoke.mjs wechat && node tools/mini-smoke.mjs douyin"
   },
   "author": "KFCheems",
   "license": "MIT",

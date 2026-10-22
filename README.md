@@ -131,6 +131,15 @@ node tools/shoot.mjs
 `tools/shoot.mjs` 会用 Playwright 真实按住/松开模拟一个会玩的人，跑完整局，
 截图到 `shots/`，并断言控制台零报错。这是每次改动手感的回归检查。
 
+`tools/mini-smoke.mjs` 会把 **真实的小游戏产物**（`dist/wechat` / `dist/douyin`）
+注入一个模拟的 `wx` / `tt` 宿主里跑起来：创建画布、注册触摸、进标题、开局。
+它的作用是抓出"只在模拟器里能跑、真机上崩"的浏览器 API 泄漏（`document`、
+`window`、`localStorage`）。两个平台都必须输出 `OK`：
+
+```bash
+npm run test:mini
+```
+
 ---
 
 ## License
