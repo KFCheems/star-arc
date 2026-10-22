@@ -108,6 +108,10 @@ export class UI {
     save(K_RUNS, this.runs);
     this.totalScore += Math.floor(w.score);
     save(K_TOTAL, this.totalScore);
+    const reasons = {
+      shard: '被碎星击穿 · 光点止步于此',
+      bound: '撞上星场边界',
+    };
     this.overData = {
       score: Math.floor(w.score),
       best: this.best,
@@ -116,6 +120,7 @@ export class UI {
       motes: w.motesTaken,
       time: w.runTime,
       newBest: this.newBest,
+      reason: reasons[w.deathReason] || '',
     };
     this.setScene('over');
     this.overT = 0;
@@ -552,26 +557,34 @@ export class UI {
 
     // scrim
     ctx.save();
-    ctx.fillStyle = `rgba(2,2,9,${0.62 * k})`;
+    ctx.fillStyle = `rgba(2,2,9,${0.66 * k})`;
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
+    // soft halo behind the block so the type never fights the live board
+    const halo = ctx.createRadialGradient(w / 2, h * 0.3, 0, w / 2, h * 0.3, Math.max(w, h) * 0.5);
+    halo.addColorStop(0, `rgba(6,6,20,${0.7 * k})`);
+    halo.addColorStop(1, 'rgba(6,6,20,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, w, h);
 
     const cx = w / 2;
-    const topY = h * 0.235 - (1 - k) * 18;
+    const ss = Math.min(w * 0.185, 68 * S);
+    const topY = h * 0.285 - (1 - k) * 18;
+    const labelY = topY - ss * 0.78;
 
     // label
-    ctx.globalAlpha = k * 0.8;
+    ctx.globalAlpha = k * 0.9;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    drawGlow(ctx, cx, topY - 34 * S, 150 * S, this.newBest ? C.gold : C.rose, 0.11 * k);
+    drawGlow(ctx, cx, labelY, 120 * S, this.newBest ? C.gold : C.rose, 0.12 * k);
     ctx.restore();
-    text(ctx, this.newBest ? '新 纪 录' : '星 程 终 结', cx, topY - 34 * S, {
-      size: 12 * S,
+    text(ctx, this.newBest ? '新 纪 录' : '星 程 终 结', cx, labelY, {
+      size: 11.5 * S,
       weight: 600,
       color: this.newBest ? C.goldHot : C.rose,
       font: FONT_CJK,
       track: true,
-      spacing: 4 * S,
+      spacing: 3.6 * S,
     });
 
     // score, counting up
@@ -580,26 +593,36 @@ export class UI {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const ss = Math.min(w * 0.2, 74 * S);
     ctx.font = `700 ${ss}px ${FONT_NUM}`;
     const grad = ctx.createLinearGradient(0, topY - ss * 0.5, 0, topY + ss * 0.5);
     grad.addColorStop(0, C.ivory);
     grad.addColorStop(1, this.newBest ? C.gold : C.ivoryDim);
     ctx.fillStyle = grad;
-    ctx.shadowColor = 'rgba(0,0,0,0.7)';
-    ctx.shadowBlur = 20;
+    ctx.shadowColor = 'rgba(0,0,0,0.75)';
+    ctx.shadowBlur = 22;
     ctx.globalAlpha = k;
     ctx.fillText(fmtScore(shown), cx, topY);
     ctx.restore();
 
-    ctx.globalAlpha = k * 0.55;
-    text(ctx, 'BEST  ' + fmtScore(d.best), cx, topY + ss * 0.72, {
-      size: 10 * S,
+    ctx.globalAlpha = k * 0.5;
+    text(ctx, 'BEST  ' + fmtScore(d.best), cx, topY + ss * 0.68, {
+      size: 9.5 * S,
       weight: 500,
       color: C.ivoryDim,
       track: true,
       spacing: 1.8 * S,
     });
+
+    // how it ended — one quiet line, so the run has a cause
+    if (d.reason) {
+      ctx.globalAlpha = k * 0.72;
+      text(ctx, d.reason, cx, topY + ss * 1.16, {
+        size: 10.5 * S,
+        weight: 400,
+        color: C.rose,
+        font: FONT_CJK,
+      });
+    }
 
     // stat row
     const stats = [
@@ -608,20 +631,19 @@ export class UI {
       { v: d.motes.toFixed(0), l: '光点' },
       { v: d.time.toFixed(0) + 's', l: '存活' },
     ];
-    const sy = topY + ss * 1.42;
+    const sy = topY + ss * 1.62;
     const colW = w / (stats.length + 0.6);
     const startX = (w - colW * stats.length) / 2 + colW / 2;
-    ctx.globalAlpha = k;
     for (let i = 0; i < stats.length; i++) {
       const st = stats[i];
       const stK = clamp((this.overT - 0.55 - i * 0.09) / 0.4, 0, 1);
       const x = startX + i * colW;
       ctx.globalAlpha = k * stK;
-      text(ctx, String(st.v), x, sy, { size: 20 * S, weight: 700, color: C.ivory });
-      text(ctx, st.l, x, sy + 22 * S, { size: 9 * S, weight: 400, color: C.ivoryDim, font: FONT_CJK });
+      text(ctx, String(st.v), x, sy, { size: 19 * S, weight: 700, color: C.ivory });
+      text(ctx, st.l, x, sy + 21 * S, { size: 8.6 * S, weight: 400, color: C.ivoryDim, font: FONT_CJK });
       if (i < stats.length - 1) {
         ctx.fillStyle = 'rgba(255,255,255,0.07)';
-        ctx.fillRect(x + colW / 2, sy - 8 * S, 1, 36 * S);
+        ctx.fillRect(x + colW / 2, sy - 8 * S, 1, 34 * S);
       }
     }
     ctx.globalAlpha = 1;

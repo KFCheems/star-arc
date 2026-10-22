@@ -111,6 +111,12 @@ export class World {
     this.deathT = 0;
     this.deathReason = '';
     this.started = false;
+    this.frozen = false;
+    this.travelAcc = 0;
+    this.overShown = false;
+    this.deathCamera = 0;
+    this.lastWall = -9;
+    this.lastMult = 1;
 
     this.hint = null;
     this.hintT = 0;
@@ -412,6 +418,8 @@ export class World {
   }
 
   addScore(v, x, y, color, label, size) {
+    // nothing scores after the run is over; the tally is frozen at death
+    if (this.state === 'dead' || this.frozen) return;
     this.score += v;
     if (label) {
       this.popups.push({
@@ -758,9 +766,14 @@ export class World {
         // demo loop on the title screen
       }
 
-      // travel score
-      if (this.started) {
-        this.score += speed * dt * CFG.scoreTravel * this.mult() * 0.5;
+      // travel score, accumulated in a float so small per-frame gains survive
+      if (this.started && this.state === 'play') {
+        this.travelAcc = (this.travelAcc || 0) + speed * dt * CFG.scoreTravel * this.mult() * 0.5;
+        if (this.travelAcc >= 1) {
+          const whole = Math.floor(this.travelAcc);
+          this.travelAcc -= whole;
+          this.score += whole;
+        }
       }
     }
 
@@ -1235,6 +1248,7 @@ export class World {
   die(reason) {
     if (this.state === 'dead') return;
     const p = this.player;
+    this.frozen = true;
     this.state = 'dead';
     this.deathT = 0;
     this.deathCamera = 0;
