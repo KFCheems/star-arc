@@ -1,0 +1,7 @@
+node_modules/
+dist/
+generated-images/
+shots/
+*.log
+.DS_Store
+Thumbs.db
