@@ -397,10 +397,9 @@ export class World {
     Audio.sfx('collect', { step: Math.min(12, this.streak + 2) });
 
     // surge every few perfects
-    const thresholds = [4, 8, 13, 19, 26, 34];
-    if (thresholds.includes(this.streak)) {
+    if (CFG.surgeAt.includes(this.streak)) {
       this.surgeCount++;
-      const sb = 420 * m;
+      const sb = Math.round(CFG.surgeBonus * m);
       this.addScore(sb, this.arena.x + this.arena.w / 2, this.arena.y + this.arena.h * 0.36, C.mint, 'SURGE  +' + sb, 26);
       this.shockwave(this.arena.x + this.arena.w / 2, this.arena.y + this.arena.h / 2, 420 * this.S);
       this.flash = 0.75;

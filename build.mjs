@@ -85,19 +85,32 @@ async function buildOnce() {
 </head>
 <body>
 <div id="wrap"><canvas id="c"></canvas></div>
-<script src="./game.js"></script>
 <script>
+  // Runs BEFORE the game boots: boot() reads the wrapper size, so the
+  // letterbox has to be in place already. 0.62 is the widest a portrait
+  // play field is allowed to look on a desktop or tablet screen.
   (function(){
     var wrap=document.getElementById('wrap');
-    // letterbox to a 9:16-ish play area on wide screens
     function fit(){
       var w=Math.min(window.innerWidth,720), h=window.innerHeight;
-      if(w/h>0.62){ w=Math.round(h*0.62); }
+      var maxW=Math.round(h*0.62);
+      if(w>maxW) w=maxW;
       wrap.style.width=w+'px'; wrap.style.height=h+'px';
     }
-    fit(); window.addEventListener('resize',function(){location.reload();});
+    fit();
+    // Re-fit on real viewport changes only. Sizing the wrapper can itself fire
+    // a resize event, so guard on the viewport actually having changed.
+    var lastW=window.innerWidth, lastH=window.innerHeight;
+    window.addEventListener('resize',function(){
+      if(window.innerWidth===lastW && window.innerHeight===lastH) return;
+      lastW=window.innerWidth; lastH=window.innerHeight;
+      fit();
+      // the canvas is sized at boot, so a genuine viewport change needs a reload
+      setTimeout(function(){location.reload();},40);
+    });
   })();
 </script>
+<script src="./game.js"></script>
 </body>
 </html>
 `,

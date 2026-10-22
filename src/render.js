@@ -443,13 +443,14 @@ export class Renderer {
       ctx.rotate(s.rot);
       ctx.scale(k, k);
 
-      // danger halo
+      // danger halo — a red presence the eye catches before the outline
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      drawGlow(ctx, 0, 0, s.r * 3.4, C.rose, 0.16 + dangerPulse * 0.1);
+      drawGlow(ctx, 0, 0, s.r * 4.6, C.rose, 0.14 + dangerPulse * 0.13);
+      drawGlow(ctx, 0, 0, s.r * 1.9, C.roseDeep, 0.2 + dangerPulse * 0.12);
       ctx.restore();
 
-      // crystalline body
+      // crystalline body: opaque, dark, so it occludes the field behind it
       ctx.beginPath();
       for (let i = 0; i < s.pts.length; i++) {
         const p = s.pts[i];
@@ -458,24 +459,71 @@ export class Renderer {
       }
       ctx.closePath();
       const g = ctx.createLinearGradient(-s.r, -s.r, s.r, s.r);
-      g.addColorStop(0, 'rgba(28,16,48,0.95)');
-      g.addColorStop(0.55, 'rgba(56,26,66,0.92)');
-      g.addColorStop(1, 'rgba(18,10,34,0.96)');
+      g.addColorStop(0, 'rgba(46,16,42,1)');
+      g.addColorStop(0.45, 'rgba(24,8,28,1)');
+      g.addColorStop(1, 'rgba(58,14,40,1)');
       ctx.fillStyle = g;
       ctx.fill();
-      ctx.strokeStyle = rgba(C.rose, 0.62 + dangerPulse * 0.3);
-      ctx.lineWidth = 1.5 * S;
-      ctx.stroke();
 
-      // inner fracture lines
+      // hot rim: thin and bright, this is what reads as "sharp"
       ctx.beginPath();
       for (let i = 0; i < s.pts.length; i++) {
-        ctx.moveTo(0, 0);
-        ctx.lineTo(s.pts[i].x * 0.72, s.pts[i].y * 0.72);
+        const p = s.pts[i];
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
       }
-      ctx.strokeStyle = rgba(C.rose, 0.16 + dangerPulse * 0.12);
-      ctx.lineWidth = 1 * S;
+      ctx.closePath();
+      ctx.strokeStyle = rgba(C.rose, 0.75 + dangerPulse * 0.25);
+      ctx.lineWidth = 1.9 * S;
+      ctx.lineJoin = 'miter';
       ctx.stroke();
+
+      // rim bloom pass, so the edge glows instead of just being coloured
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = rgba(C.rose, 0.3 + dangerPulse * 0.2);
+      ctx.lineWidth = 4.5 * S;
+      ctx.stroke();
+      ctx.restore();
+
+      // inner fracture: lit veins from the core outward
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.beginPath();
+      for (let i = 0; i < s.pts.length; i++) {
+        const a = s.pts[i];
+        const b = s.pts[(i + 1) % s.pts.length];
+        ctx.moveTo(a.x * 0.34, a.y * 0.34);
+        ctx.lineTo(b.x * 0.34, b.y * 0.34);
+      }
+      ctx.strokeStyle = rgba(C.rose, 0.3 + dangerPulse * 0.22);
+      ctx.lineWidth = 1.1 * S;
+      ctx.stroke();
+      // core ember
+      const coreR = s.r * (0.24 + dangerPulse * 0.07);
+      const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * 2.2);
+      cg.addColorStop(0, rgba('#FFD8E0', 0.85));
+      cg.addColorStop(0.4, rgba(C.rose, 0.4));
+      cg.addColorStop(1, rgba(C.rose, 0));
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.arc(0, 0, coreR * 2.2, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+
+      // rotation tick marks make the spin legible
+      ctx.save();
+      ctx.strokeStyle = rgba(C.roseDeep, 0.5);
+      ctx.lineWidth = 1 * S;
+      for (let i = 0; i < 3; i++) {
+        const a = s.t * 0.8 + (i * TAU) / 3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * s.r * 1.12, Math.sin(a) * s.r * 1.12);
+        ctx.lineTo(Math.cos(a) * s.r * 1.28, Math.sin(a) * s.r * 1.28);
+        ctx.stroke();
+      }
+      ctx.restore();
+
       ctx.restore();
     }
   }

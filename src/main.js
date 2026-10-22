@@ -128,7 +128,12 @@ export function boot() {
     const camY = world.shakeY;
 
     // clear
-    ctx.setTransform(sys.dpr, 0, 0, sys.dpr, 0, 0);
+    // clear everything (including the letterbox gutters) in device space
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#04030C';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(sys.dpr, 0, 0, sys.dpr, (sys.offX || 0) * sys.dpr, 0);
 
     // death zoom: pull the camera back slightly
     let zoom = 1;

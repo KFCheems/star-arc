@@ -33,29 +33,50 @@ export function getSystem() {
     } catch (e) {
       info = {};
     }
-    const w = info.windowWidth || info.screenWidth || 375;
-    const h = info.windowHeight || info.screenHeight || 667;
+    const sw = info.windowWidth || info.screenWidth || 375;
+    const sh = info.windowHeight || info.screenHeight || 667;
+    // Tablets and some foldables report a landscape-ish canvas. The game is
+    // portrait, so we keep a vertical play field and centre it rather than
+    // stretching everything wide.
+    const MAX_AR = 0.72;
+    let w = sw;
+    let h = sh;
+    let offX = 0;
+    if (sw / sh > MAX_AR) {
+      w = Math.round(sh * MAX_AR);
+      offX = Math.round((sw - w) / 2);
+    }
     const dpr = Math.min(info.pixelRatio || 2, 3);
     const safe = info.safeArea;
     system = {
       width: w,
       height: h,
       dpr,
+      offX,
       // distance from the physical top/bottom of the screen to the safe area
       top: safe && safe.top != null ? safe.top : info.statusBarHeight || 0,
       bottom: safe && safe.bottom != null ? h - safe.bottom : 0,
     };
   } else {
-    const w = Math.min(window.innerWidth, 720);
-    const h = window.innerHeight;
+    // Web: let the page letterbox us. The shell sets the wrapper size.
+    const wrap = document.getElementById('wrap');
+    const w = wrap ? wrap.clientWidth : Math.min(window.innerWidth, 720);
+    const h = wrap ? wrap.clientHeight : window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     system = { width: w, height: h, dpr, top: 0, bottom: 0 };
   }
   return system;
 }
 
+/** Recompute geometry after an orientation change or resize. */
+export function refreshSystem() {
+  system = null;
+  return getSystem();
+}
+
 export function initCanvas() {
   const sys = getSystem();
+  const offX = sys.offX || 0;
   if (isMini) {
     canvas = S().createCanvas();
   } else {
@@ -63,14 +84,15 @@ export function initCanvas() {
     canvas = el || document.createElement('canvas');
     if (!el) document.body.appendChild(canvas);
   }
-  canvas.width = Math.round(sys.width * sys.dpr);
+  canvas.width = Math.round((sys.width + offX * 2) * sys.dpr);
   canvas.height = Math.round(sys.height * sys.dpr);
   if (!isMini) {
-    canvas.style.width = sys.width + 'px';
+    canvas.style.width = sys.width + offX * 2 + 'px';
     canvas.style.height = sys.height + 'px';
   }
   ctx = canvas.getContext('2d');
-  ctx.setTransform(sys.dpr, 0, 0, sys.dpr, 0, 0);
+  // offX centres a portrait play field on a wide (tablet / foldable) screen
+  ctx.setTransform(sys.dpr, 0, 0, sys.dpr, offX * sys.dpr, 0);
   return { canvas, ctx, sys };
 }
 
