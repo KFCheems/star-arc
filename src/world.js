@@ -421,7 +421,15 @@ export class World {
     if (this.state === 'dead' || this.frozen) return;
     this.score += v;
     if (label) {
+      for (const p of this.popups) {
+        if (p.text === label && this.t - p.born < 0.34) {
+          p.y = Math.min(p.y, y - 6);
+          p.life = Math.max(p.life, 0.55);
+          return;
+        }
+      }
       this.popups.push({
+        born: this.t,
         x,
         y,
         text: label,

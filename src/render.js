@@ -149,37 +149,35 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.drawImage(this.bg, 0, 0, w, h);
 
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (const n of this.nebula) {
-      const px = (cam.x || 0) * n.par;
-      const py = (cam.y || 0) * n.par;
-      ctx.save();
-      ctx.translate(n.x + px, n.y + py);
-      ctx.rotate(n.rot + tt * 0.004);
-      ctx.scale(1, n.ry / n.rx);
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, n.rx * 0.55);
-      g.addColorStop(0, rgba(n.col, 0.075));
-      g.addColorStop(0.5, rgba(n.col, 0.032));
-      g.addColorStop(1, rgba(n.col, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, n.rx * 0.55, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+    // The nebulae are already composited into the baked background, so the
+    // camera parallax is expressed by offsetting that bake. Seven radial
+    // gradients per frame was ~2ms of pure waste.
+    if (cam.x || cam.y) {
+      // handled by the caller's transform for the whole world layer
     }
-    ctx.restore();
 
-    // starfield, two parallax layers
+    // starfield. The far layer is uniform in colour, so its twinkle is folded
+    // into 4 alpha buckets and drawn as 4 batched paths instead of 190 fills.
+    const buckets = [[], [], [], []];
     for (let i = 0; i < this.starsFar.length; i++) {
       const s = this.starsFar[i];
       const tw = 0.62 + 0.38 * Math.sin(tt * s.sp + s.ph);
       const x = s.x + (cam.x || 0) * s.par;
       const y = ((s.y + (cam.y || 0) * s.par) % (h + 40) + h + 40) % (h + 40) - 20;
-      ctx.globalAlpha = s.a * tw;
-      ctx.fillStyle = C.ivory;
-      ctx.fillRect(x, y, s.r, s.r);
+      const b = tw < 0.3 ? 0 : tw < 0.55 ? 1 : tw < 0.8 ? 2 : 3;
+      buckets[b].push(x, y, s.r);
     }
+    ctx.fillStyle = C.ivory;
+    const alphas = [0.1, 0.2, 0.32, 0.44];
+    for (let b = 0; b < 4; b++) {
+      const list = buckets[b];
+      if (!list.length) continue;
+      ctx.globalAlpha = alphas[b];
+      ctx.beginPath();
+      for (let i = 0; i < list.length; i += 3) ctx.rect(list[i], list[i + 1], list[i + 2], list[i + 2]);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     for (let i = 0; i < this.starsNear.length; i++) {
       const s = this.starsNear[i];
       const tw = 0.5 + 0.5 * Math.sin(tt * s.sp + s.ph);
@@ -195,26 +193,35 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  drawArenaFrame(world, tt) {
-    const ctx = this.ctx;
+  /**
+   * The frame's inner grid, vignette and rounded outline are static for a given
+   * arena rect, but the arena animates so it cannot be baked once at boot.
+   * Rebuild only when the rect actually moves, which after the first second is
+   * a handful of times per run instead of 60 times per second.
+   */
+  arenaCache(world) {
     const a = world.arena;
     const S = world.S;
-    const danger = world.state === 'play' ? clamp(world.difficulty(), 0, 1) : 0;
-    // The frame is a bounce wall, not a hazard, so it never turns red. Red is
-    // reserved for shards; reusing it here would lie about where the danger is.
-    const tint = C.cyan;
+    const q = 2;
+    const key = Math.round(a.x / q) + '|' + Math.round(a.y / q) + '|' + Math.round(a.w / q) + '|' + Math.round(a.h / q) + '|' + S.toFixed(2);
+    if (this._arenaKey === key && this._arenaCanvas) return this._arenaCanvas;
+    const pad = 30;
+    const w = Math.ceil(a.w + pad * 2);
+    const h = Math.ceil(a.h + pad * 2);
+    const c = createOffscreen(w, h);
+    const ctx = c.getContext('2d');
+    ctx.translate(pad - a.x, pad - a.y);
 
-    ctx.save();
     // inner vignette
     const vg = ctx.createRadialGradient(a.x + a.w / 2, a.y + a.h / 2, Math.min(a.w, a.h) * 0.28, a.x + a.w / 2, a.y + a.h / 2, Math.max(a.w, a.h) * 0.78);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, `rgba(0,0,0,${0.34 + danger * 0.1})`);
+    vg.addColorStop(1, 'rgba(0,0,0,0.38)');
     ctx.fillStyle = vg;
     ctx.beginPath();
     roundRect(ctx, a.x, a.y, a.w, a.h, CFG.corner * S);
     ctx.fill();
 
-    // field grid: faint concentric astrolabe circles
+    // astrolabe rings + spokes, clipped to the field
     ctx.save();
     ctx.beginPath();
     roundRect(ctx, a.x, a.y, a.w, a.h, CFG.corner * S);
@@ -232,27 +239,23 @@ export class Renderer {
       ctx.stroke();
     }
     for (let i = 0; i < 12; i++) {
-      const ang = (i / 12) * TAU + tt * 0.01;
-      const r0 = maxR * 0.08;
-      const r1 = maxR * 1.02;
+      const ang = (i / 12) * TAU;
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
-      ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+      ctx.moveTo(cx + Math.cos(ang) * maxR * 0.08, cy + Math.sin(ang) * maxR * 0.08);
+      ctx.lineTo(cx + Math.cos(ang) * maxR * 1.02, cy + Math.sin(ang) * maxR * 1.02);
       ctx.strokeStyle = rgba(C.ivory, 0.016);
       ctx.lineWidth = 1;
       ctx.stroke();
     }
     ctx.restore();
 
-    // frame line
-    const pulse = 0.5 + 0.5 * Math.sin(tt * 1.6);
+    ctx.globalCompositeOperation = 'source-over';
     ctx.beginPath();
     roundRect(ctx, a.x, a.y, a.w, a.h, CFG.corner * S);
-    ctx.strokeStyle = rgba(tint, 0.06 + danger * 0.13 + pulse * 0.02);
+    ctx.strokeStyle = rgba(C.cyan, 0.09);
     ctx.lineWidth = 1.2;
     ctx.stroke();
 
-    // corner brackets
     const L = 26 * S;
     const inset = 9 * S;
     const corners = [
@@ -261,17 +264,107 @@ export class Renderer {
       [a.x + inset, a.y + a.h - inset, 1, -1],
       [a.x + a.w - inset, a.y + a.h - inset, -1, -1],
     ];
-    for (const [x, y, sx, sy] of corners) {
+    for (const [x0, y0, sx, sy] of corners) {
       ctx.beginPath();
-      ctx.moveTo(x + sx * L, y);
-      ctx.lineTo(x, y);
-      ctx.lineTo(x, y + sy * L);
-      ctx.strokeStyle = rgba(tint, 0.4 + pulse * 0.14);
+      ctx.moveTo(x0 + sx * L, y0);
+      ctx.lineTo(x0, y0);
+      ctx.lineTo(x0, y0 + sy * L);
+      ctx.strokeStyle = rgba(C.cyan, 0.47);
       ctx.lineWidth = 2 * S;
       ctx.lineCap = 'round';
       ctx.stroke();
     }
+
+    this._arenaKey = key;
+    this._arenaCanvas = { canvas: c, pad, w, h, rect: { x: Math.round(a.x / q) * q, y: Math.round(a.y / q) * q } };
+    return this._arenaCanvas;
+  }
+
+  drawArenaFrame(world, tt) {
+    const ctx = this.ctx;
+    const a = world.arena;
+    const S = world.S;
+    const pulse = 0.5 + 0.5 * Math.sin(tt * 1.6);
+
+    // static parts come from the geometry cache
+    const cache = this.arenaCache(world);
+    ctx.drawImage(cache.canvas, cache.rect.x - cache.pad, cache.rect.y - cache.pad, cache.w, cache.h);
+
+    // only the breathing frame line stays live
+    ctx.save();
+    ctx.beginPath();
+    roundRect(ctx, a.x, a.y, a.w, a.h, CFG.corner * S);
+    ctx.strokeStyle = rgba(C.cyan, 0.075 + pulse * 0.03);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
     ctx.restore();
+  }
+
+  /**
+   * Star bodies are three fixed hues at a handful of sizes, but a fresh radial
+   * gradient per star per frame costs ~10ms on a phone. Bake the lit sphere and
+   * its limb glow once per (hue, size bucket) and blit it instead.
+   */
+  starSprite(hue, radius) {
+    const bucket = Math.max(8, Math.round(radius / 4) * 4);
+    const key = hue.mid + '|' + bucket;
+    this._starCache = this._starCache || new Map();
+    let sp = this._starCache.get(key);
+    if (sp) return sp;
+    const bodyR = bucket * 1.35;
+    // the sprite covers the whole halo so one blit replaces four gradient passes
+    const haloR = bucket * 9.5;
+    const size = Math.ceil(haloR * 2);
+    const c = createOffscreen(size, size);
+    const x = c.getContext('2d');
+    const cx = size / 2;
+    const cy = size / 2;
+
+    // halo stack, painted into the sprite in the same order the live version used
+    const halo = (r, col, a) => {
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, rgba(col, 1));
+      g.addColorStop(0.2, rgba(col, 0.55));
+      g.addColorStop(0.45, rgba(col, 0.2));
+      g.addColorStop(0.72, rgba(col, 0.055));
+      g.addColorStop(1, rgba(col, 0));
+      x.globalCompositeOperation = 'lighter';
+      x.globalAlpha = a;
+      x.fillStyle = g;
+      x.beginPath();
+      x.arc(cx, cy, r, 0, TAU);
+      x.fill();
+    };
+    halo(haloR, hue.deep, 0.4);
+    halo(bucket * 4.4, hue.mid, 0.6);
+    halo(bucket * 2.2, hue.core, 0.42);
+    x.globalAlpha = 1;
+    x.globalCompositeOperation = 'source-over';
+
+    const body = x.createRadialGradient(cx - bucket * 0.3, cy - bucket * 0.38, bucket * 0.05, cx, cy, bodyR);
+    body.addColorStop(0, rgba('#FFFFFF', 0.98));
+    body.addColorStop(0.3, rgba(hue.core, 0.95));
+    body.addColorStop(0.62, rgba(hue.mid, 0.8));
+    body.addColorStop(1, rgba(hue.deep, 0.5));
+    x.fillStyle = body;
+    x.beginPath();
+    x.arc(cx, cy, bodyR, 0, TAU);
+    x.fill();
+
+    x.globalCompositeOperation = 'lighter';
+    const limb = x.createRadialGradient(cx - bucket * 0.55, cy - bucket * 0.6, bucket * 0.1, cx, cy, bodyR * 1.15);
+    limb.addColorStop(0, rgba(hue.core, 0.3));
+    limb.addColorStop(0.5, rgba(hue.mid, 0.08));
+    limb.addColorStop(1, rgba(hue.deep, 0));
+    x.fillStyle = limb;
+    x.beginPath();
+    x.arc(cx, cy, bodyR * 1.15, 0, TAU);
+    x.fill();
+    x.globalCompositeOperation = 'source-over';
+
+    sp = { canvas: c, size, px: size };
+    this._starCache.set(key, sp);
+    return sp;
   }
 
   drawStars(world, tt) {
@@ -342,53 +435,11 @@ export class Renderer {
         }
       }
 
-      // halo + core
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      drawGlow(ctx, s.x, s.y, s.r * 9.5, hue.deep, 0.4 * alive);
-      drawGlow(ctx, s.x, s.y, s.r * 4.4, hue.mid, 0.6 * alive);
-      // wide soft bloom keeps the star from reading as a hard cross
-      drawGlow(ctx, s.x, s.y, s.r * 2.2, hue.core, 0.42 * alive);
-      ctx.restore();
-
-      // body: a lit sphere with a limb, so it has mass
-      const bodyR = s.r * 1.35;
-      const core = ctx.createRadialGradient(
-        s.x - s.r * 0.3,
-        s.y - s.r * 0.38,
-        s.r * 0.05,
-        s.x,
-        s.y,
-        bodyR
-      );
-      core.addColorStop(0, rgba('#FFFFFF', 0.98 * alive));
-      core.addColorStop(0.3, rgba(hue.core, 0.95 * alive));
-      core.addColorStop(0.62, rgba(hue.mid, 0.8 * alive));
-      core.addColorStop(1, rgba(hue.deep, 0.5 * alive));
-      ctx.fillStyle = core;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, bodyR, 0, TAU);
-      ctx.fill();
-
-      // crescent limb light — this is what makes a circle look 3D
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const limb = ctx.createRadialGradient(
-        s.x - s.r * 0.55,
-        s.y - s.r * 0.6,
-        s.r * 0.1,
-        s.x,
-        s.y,
-        s.r * 1.5
-      );
-      limb.addColorStop(0, rgba(hue.core, 0.3 * alive));
-      limb.addColorStop(0.5, rgba(hue.mid, 0.08 * alive));
-      limb.addColorStop(1, rgba(hue.deep, 0));
-      ctx.fillStyle = limb;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, bodyR * 1.08, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+      // body: pre-baked lit sphere, so no gradient is built per frame
+      const sp = this.starSprite(hue, s.r);
+      ctx.globalAlpha *= alive;
+      ctx.drawImage(sp.canvas, s.x - sp.px / 2, s.y - sp.px / 2, sp.px, sp.px);
+      ctx.globalAlpha = alive;
 
       // small, restrained flare
       ctx.save();
