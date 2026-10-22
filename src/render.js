@@ -200,7 +200,9 @@ export class Renderer {
     const a = world.arena;
     const S = world.S;
     const danger = world.state === 'play' ? clamp(world.difficulty(), 0, 1) : 0;
-    const tint = danger > 0.55 ? C.rose : C.cyan;
+    // The frame is a bounce wall, not a hazard, so it never turns red. Red is
+    // reserved for shards; reusing it here would lie about where the danger is.
+    const tint = C.cyan;
 
     ctx.save();
     // inner vignette
@@ -720,15 +722,18 @@ export class Renderer {
       const t = clamp(p.life / p.maxLife, 0, 1);
       const appear = clamp((1 - t) * 6, 0, 1);
       const scale = 1 + (1 - appear) * 0.35;
-      // measure properly and keep the label on screen wherever it was born
+      // measure properly and keep the label on screen wherever it was born.
+      // word labels are drawn with manual tracking, so add the extra gaps or
+      // the clamp under-estimates and the text still overflows.
       if (p._w == null) {
         ctx.font = `700 ${p.size}px ${p.style === 'word' ? FONT_CJK : FONT_NUM}`;
-        p._w = ctx.measureText(p.text).width;
+        const track = p.style === 'word' ? p.size * 0.06 * (p.text.length - 1) : 0;
+        p._w = ctx.measureText(p.text).width + track;
       }
       // small echo labels get a slight lateral offset so stacked gains do not
       // print on top of each other
       const drift = p.style === 'num' ? (hash2(Math.round(p.x), Math.round(p.y)) - 0.5) * 26 * S : 0;
-      const margin = p._w / 2 + 10 * S;
+      const margin = p._w / 2 + 8 * S;
       const px = clamp(p.x + drift, margin, this.w - margin);
       ctx.save();
       ctx.globalAlpha = Math.min(1, t * 1.7) * appear;

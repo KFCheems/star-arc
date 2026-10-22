@@ -5,3 +5,4 @@ shots/
 *.log
 .DS_Store
 Thumbs.db
+store-shots/

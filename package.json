@@ -8,7 +8,9 @@
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
     "serve": "node build.mjs && node tools/serve.mjs",
-    "shots": "node tools/shoot.mjs"
+    "shots": "node tools/shoot.mjs",
+    "store": "node tools/store-shots.mjs",
+    "art": "node tools/art.mjs"
   },
   "author": "KFCheems",
   "license": "MIT",

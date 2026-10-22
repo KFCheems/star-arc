@@ -66,9 +66,12 @@ await shot('04-flight');
 // 5. late game: shards on the field, high multiplier
 await page.evaluate(() => {
   const w = window.__GAME__.world;
+  // restart cleanly so the staged shot is not taken mid-death
+  if (w.state !== 'play') { window.__GAME__.ui.startRun(); }
   w.runTime = 150;
   w.streak = 11;
   w.score = 42800;
+  w.frozen = false;
   w.shards.length = 0;
   const spots = [
     [w.arena.x + w.arena.w * 0.26, w.arena.y + w.arena.h * 0.22],
@@ -83,9 +86,56 @@ await page.evaluate(() => {
   }
 });
 await page.mouse.down();
-await page.waitForTimeout(500);
+await page.waitForTimeout(400);
 await page.mouse.up();
-await page.waitForTimeout(1200);
+await page.waitForTimeout(400);
+// re-seed shards: updateShards trims back to targetShards() every frame, so
+// they have to be placed after the run clock is advanced
+await page.evaluate(() => {
+  const w = window.__GAME__.world;
+  const spots = [
+    [w.arena.x + w.arena.w * 0.5, w.arena.y + w.arena.h * 0.13],
+    [w.arena.x + w.arena.w * 0.82, w.arena.y + w.arena.h * 0.46],
+    [w.arena.x + w.arena.w * 0.2, w.arena.y + w.arena.h * 0.68],
+    [w.arena.x + w.arena.w * 0.62, w.arena.y + w.arena.h * 0.9],
+  ];
+  w.shards.length = 0;
+  for (const [x, y] of spots) {
+    const s = w.makeShard(x, y);
+    s.spawn = 1;
+    s.vx = 0; s.vy = 0;
+    w.shards.push(s);
+  }
+  w.streak = 11;
+});
+// let the spawner fill naturally from the (now late-game) run clock
+await page.waitForTimeout(900);
+// re-arm if the bot clipped a shard while we were staging
+await page.evaluate(() => {
+  const g = window.__GAME__;
+  const w = g.world;
+  if (w.state !== 'play') {
+    g.ui.startRun();
+    w.runTime = 151;
+    w.streak = 11;
+    w.score = 42920;
+  }
+  w.player.x = w.arena.x + w.arena.w * 0.5;
+  w.player.y = w.arena.y + w.arena.h * 0.42;
+  w.player.mode = 'fly';
+  w.player.star = null;
+  w.player.vx = 60;
+  w.player.vy = -260;
+  w.player.trail.length = 0;
+  for (let i = 0; i < 8; i++) w.shards.length && w.shards.pop();
+});
+await page.waitForTimeout(700);
+const live = await page.evaluate(() => {
+  const w = window.__GAME__.world;
+  return { state: w.state, shards: w.shards.length, mode: w.player.mode, runTime: +w.runTime.toFixed(0) };
+});
+console.log('  staged:', JSON.stringify(live));
+if (live.shards < 2) console.log('  WARN no shards in frame');
 await shot('05-late');
 
 // 6. game over

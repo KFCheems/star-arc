@@ -418,15 +418,19 @@ export class UI {
     ctx.fillText(scoreStr, w / 2, top + 2);
     ctx.restore();
 
-    // best under it
+    // best under it. Show a live record callout once the run passes it, rather
+    // than a number that reads as a contradiction with the score above.
     if (this.best > 0) {
-      ctx.globalAlpha = 0.5;
-      text(ctx, 'BEST ' + fmtScore(this.best), w / 2, top + 4 + sc * 1.06, {
+      const beating = world.score > this.best;
+      ctx.globalAlpha = beating ? 0.9 : 0.5;
+      const label = beating ? '★ 新纪录' : 'BEST ' + fmtScore(this.best);
+      text(ctx, label, w / 2, top + 4 + sc * 1.06, {
         size: 9 * S,
         weight: 600,
-        color: C.ivoryDim,
+        color: beating ? C.gold : C.ivoryDim,
         track: true,
         spacing: 1.4 * S,
+        font: beating ? FONT_CJK : FONT_NUM,
       });
     }
 
@@ -464,16 +468,18 @@ export class UI {
     this.drawButton(ctx, pb, tt, true);
 
     // tutorial coach
-    if (this.sceneT < 9 && !world.perfects) {
+    if (this.sceneT < 9 && !world.perfects && world.score < 900) {
       this.drawCoach(ctx, tt);
     }
 
-    // danger tint at the edges when shards appear
+    // A faint red pressure at the edges once shards are on the field. It has
+    // to stay very low: the HUD is where the score has to read instantly, and
+    // the shards themselves already carry the danger.
     if (world.shards.length > 0) {
-      const intensity = clamp(world.shards.length / 5, 0, 1) * 0.5 + 0.3;
-      const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.36, w / 2, h / 2, Math.max(w, h) * 0.7);
+      const intensity = clamp(world.shards.length / 6, 0, 1);
+      const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.46, w / 2, h / 2, Math.max(w, h) * 0.76);
       g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, rgba(C.rose, 0.05 * intensity));
+      g.addColorStop(1, rgba(C.roseDeep, 0.1 * intensity));
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
     }

@@ -463,8 +463,10 @@ export class World {
   }
 
   shockwave(x, y, radius) {
-    this.rings.push({ x, y, r: 10, r0: 10, toR: radius, life: 0.62, maxLife: 0.62, color: C.goldHot, alpha: 0.95, width: 4 * this.S, shatter: true });
-    this.rings.push({ x, y, r: 10, r0: 10, toR: radius * 0.66, life: 0.5, maxLife: 0.5, color: C.cyanHot, alpha: 0.7, width: 2 * this.S });
+    // Short and bright: a local hit, not a screen-wide ring. Long, large rings
+    // read as background noise and compete with the orbit rings.
+    this.rings.push({ x, y, r: 10, r0: 10, toR: radius * 0.52, life: 0.42, maxLife: 0.42, color: C.goldHot, alpha: 0.9, width: 4.5 * this.S });
+    this.rings.push({ x, y, r: 10, r0: 10, toR: radius * 0.32, life: 0.32, maxLife: 0.32, color: C.cyanHot, alpha: 0.62, width: 2 * this.S });
   }
 
   // ------------------------------------------------------------------- flow
@@ -1084,29 +1086,66 @@ export class World {
     const want = this.state === 'play' ? this.targetShards() : 0;
     while (this.shards.length < want) {
       const a = this.arena;
-      // Try the fair keep-out zones first, then relax them. On a small phone
-      // with five stars and six shards there may be no spot that satisfies the
-      // ideal spacing at all, and silently spawning nothing would mean the
-      // game just stops getting harder.
+      // Search for the best legal spot: sample a handful of candidates at each
+      // spacing tier and keep the roomiest one. Relaxing the keep-out zones
+      // tier by tier matters because on a small phone with five stars and six
+      // shards there may be no spot that satisfies the ideal spacing — and
+      // silently spawning nothing would stop the game getting harder.
+      const CANDIDATES = 60;
       let placed = null;
-      for (let tier = 0; tier < 4 && !placed; tier++) {
-        const relax = tier * 0.36;
-        const playerGap = 210 * S * (1 - relax * 0.45);
-        const starGap = 104 * S * (1 - relax * 0.5);
-        const shardGap = 128 * S * (1 - relax * 0.55);
-        for (let guard = 0; guard < 28; guard++) {
-          const x = rand(a.x + 48, a.x + a.w - 48);
-          const y = rand(a.y + 48, a.y + a.h - 48);
-          if (dist(x, y, p.x, p.y) < playerGap) continue;
+      for (let tier = 0; tier < 8 && !placed; tier++) {
+        const relax = Math.min(tier * 0.16, 0.95);
+        const playerGap = 132 * S * (1 - relax * 0.6);
+        const starGap = 26 * S * (1 - relax * 0.55);
+        const shardGap = 118 * S * (1 - relax * 0.5);
+        let best = null;
+        let bestScore = -Infinity;
+        for (let i = 0; i < CANDIDATES; i++) {
+          const x = rand(a.x + 46, a.x + a.w - 46);
+          const y = rand(a.y + 46, a.y + a.h - 46);
+          const dp = dist(x, y, p.x, p.y);
+          if (dp < playerGap) continue;
           let ok = true;
-          for (const s of this.stars) if (dist(x, y, s.x, s.y) < s.orbitR + starGap) ok = false;
-          for (const o of this.shards) if (dist(x, y, o.x, o.y) < shardGap) ok = false;
-          for (const m of this.motes) if (dist(x, y, m.x, m.y) < 22 * S) ok = false;
+          let clearance = dp - playerGap;
+          for (const s of this.stars) {
+            // Hard floor: never inside an orbit ring, at any relaxation tier.
+            // A shard under the ring you are orbiting is an unavoidable death.
+            if (dist(x, y, s.x, s.y) < s.orbitR + 34 * S) {
+              ok = false;
+              break;
+            }
+            const gap = dist(x, y, s.x, s.y) - (s.orbitR + starGap);
+            if (gap < 0) {
+              ok = false;
+              break;
+            }
+            clearance = Math.min(clearance, gap);
+          }
           if (!ok) continue;
-          placed = { x, y };
-          break;
+          for (const o of this.shards) {
+            const gap = dist(x, y, o.x, o.y) - shardGap;
+            if (gap < 0) {
+              ok = false;
+              break;
+            }
+            clearance = Math.min(clearance, gap);
+          }
+          if (!ok) continue;
+          for (const m of this.motes) {
+            if (dist(x, y, m.x, m.y) < 22 * S) {
+              ok = false;
+              break;
+            }
+          }
+          if (!ok) continue;
+          if (clearance > bestScore) {
+            bestScore = clearance;
+            best = { x, y };
+          }
         }
+        if (best) placed = best;
       }
+      // no legal spot at any spacing tier: stop trying rather than spin
       if (!placed) break;
       this.shards.push(this.makeShard(placed.x, placed.y));
     }
@@ -1242,11 +1281,11 @@ export class World {
           r: 12,
           r0: 12,
           toR: Math.hypot(this.arena.w, this.arena.h) * 0.62,
-          life: 1.1,
-          maxLife: 1.1,
-          color: C.cyanDim,
-          alpha: 0.4,
-          width: 1.6 * this.S,
+          life: 0.62,
+          maxLife: 0.62,
+          color: C.cyanHot,
+          alpha: 0.5,
+          width: 2.4 * this.S,
         });
         for (const s2 of this.stars) s2.arcW = 1.75;
         Audio.sfx('streak');
