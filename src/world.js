@@ -112,6 +112,7 @@ export class World {
     this.deathReason = '';
     this.started = false;
     this.frozen = false;
+    this.paused = false;
     this.travelAcc = 0;
     this.overShown = false;
     this.deathCamera = 0;
@@ -495,6 +496,9 @@ export class World {
   }
 
   update(dtRaw) {
+    // A paused run is fully frozen: no simulation, no particles, no score.
+    // Drawing continues so the paused frame stays visible underneath the menu.
+    if (this.paused && this.state === 'play') return;
     // global time scaling
     if (this.hitstop > 0) {
       this.hitstop -= dtRaw;

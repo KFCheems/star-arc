@@ -144,6 +144,13 @@ export class UI {
       }
       this.startRun();
     } else if (this.scene === 'play') {
+      // the pause chip is an affordance, not part of the play field: hitting it
+      // must never also count as a tap that orbits/launches
+      if (this.hit(this.pauseButton(), p.x, p.y)) {
+        this.hoverBtn = this.pauseButton();
+        this.activate('pause');
+        return;
+      }
       this.world.press();
     } else if (this.scene === 'over') {
       if (this.overT < 0.9) return;
@@ -159,6 +166,11 @@ export class UI {
 
   pointerUp(p) {
     if (this.scene === 'play') {
+      // a press that landed on the pause chip must not fire a release
+      if (this.hoverBtn && this.hoverBtn.id === 'pause') {
+        this.hoverBtn = null;
+        return;
+      }
       this.world.release();
       return;
     }
@@ -176,6 +188,8 @@ export class UI {
     Audio.sfx('ui');
     if (id === 'play') {
       this.startRun();
+    } else if (id === 'pause') {
+      this.pauseRun();
     } else if (id === 'mute') {
       this.muted = !this.muted;
       save(K_MUTE, this.muted);
@@ -191,10 +205,20 @@ export class UI {
       this.setScene('title');
       this.world.reset();
     } else if (id === 'resume') {
+      this.world.paused = false;
+      Audio.setIntensity(0.2);
       this.setScene('play');
     } else if (id === 'rank') {
       this.openRank();
     }
+  }
+
+  /** Freeze the simulation without ending the run. */
+  pauseRun() {
+    if (this.scene !== 'play') return;
+    this.world.release();
+    this.world.paused = true;
+    this.setScene('paused');
   }
 
   doShare() {
@@ -252,7 +276,10 @@ export class UI {
     const { w, h } = this;
     if (this.scene === 'title') this.drawTitle(ctx, tt);
     else if (this.scene === 'play') this.drawHUD(ctx, tt);
-    else if (this.scene === 'over') this.drawOver(ctx, tt);
+    else if (this.scene === 'paused') {
+      this.drawHUD(ctx, tt);
+      this.drawPaused(ctx, tt);
+    } else if (this.scene === 'over') this.drawOver(ctx, tt);
   }
 
   // ------------------------------------------------------------------ title
@@ -265,6 +292,25 @@ export class UI {
     return [
       this.button('play', (w - bw) / 2, by, bw, bh, '开始', { primary: true }),
       this.button('mute', w - 62, this.safeTop + 8, 44, 44, '', { icon: this.muted ? 'mute' : 'sound', primary: false, small: true }),
+    ];
+  }
+
+  /** The in-run pause affordance, in the HUD's top-right corner. */
+  pauseButton() {
+    const S = this.world.S;
+    return this.button('pause', this.w - 54 * S, this.safeTop + 4, 38 * S, 38 * S, '', { icon: 'pause' });
+  }
+
+  pauseButtons() {
+    const { w, h } = this;
+    const S = this.world.S;
+    const bw = Math.min(w * 0.56, 240);
+    const bh = 52 * S;
+    const bx = (w - bw) / 2;
+    const by = h * 0.5;
+    return [
+      this.button('resume', bx, by, bw, bh, '继续', { primary: true }),
+      this.button('home', bx, by + bh + 14 * S, bw, bh * 0.86, '结束本局', {}),
     ];
   }
 
@@ -468,7 +514,7 @@ export class UI {
     this.drawButton(ctx, pb, tt, true);
 
     // tutorial coach
-    if (this.sceneT < 9 && !world.perfects && world.score < 900) {
+    if (this.scene === 'play' && this.sceneT < 9 && !world.perfects && world.score < 900) {
       this.drawCoach(ctx, tt);
     }
 
@@ -552,6 +598,38 @@ export class UI {
       this.button('home', bx + bw * 0.5 + gap * 0.5, by + (bh + gap) * 2, bw * 0.5 - gap * 0.5, bh * 0.8, '返回', { small2: true }),
       this.button('rank', bx, by + (bh + gap) * 2, bw * 0.5 - gap * 0.5, bh * 0.8, '排行榜', { small2: true }),
     ];
+  }
+
+  drawPaused(ctx, tt) {
+    const { w, h } = this;
+    const S = this.world.S;
+    const k = clamp(this.sceneT / 0.22, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = k;
+    ctx.fillStyle = `rgba(2,2,9,${0.74 * k})`;
+    ctx.fillRect(0, 0, w, h);
+
+    const titleY = h * 0.5 - 96 * S;
+    text(ctx, '已 暂 停', w / 2, titleY, {
+      size: 17 * S,
+      weight: 600,
+      color: C.ivory,
+      font: FONT_CJK,
+      track: true,
+      spacing: 4 * S,
+    });
+
+    const d = this.world;
+    ctx.globalAlpha = k * 0.62;
+    text(ctx, `${fmtScore(d.score)}  ·  连击 ${d.streak}  ·  ×${d.mult()}`, w / 2, titleY + 28 * S, {
+      size: 11 * S,
+      weight: 500,
+      color: C.ivoryDim,
+    });
+    ctx.globalAlpha = k;
+
+    for (const b of this.pauseButtons()) this.drawButton(ctx, b, tt);
+    ctx.restore();
   }
 
   drawOver(ctx, tt) {

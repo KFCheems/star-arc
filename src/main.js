@@ -51,29 +51,11 @@ export function boot() {
   let paused = false;
   const doPause = () => {
     if (ui.scene === 'play') {
-      ui.setScene('paused');
-      world.release();
+      ui.pauseRun();
       paused = true;
     }
   };
 
-  // lightweight pause overlay: drawn inline, no extra module
-  const drawPause = (ctx, tt) => {
-    const { width: w, height: h } = sys;
-    ctx.fillStyle = 'rgba(2,2,9,0.72)';
-    ctx.fillRect(0, 0, w, h);
-    const cy = h * 0.42;
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = C.ivory;
-    ctx.font = `600 ${22 * world.S}px "PingFang SC","Microsoft YaHei",sans-serif`;
-    ctx.fillText('已暂停', w / 2, cy);
-    ctx.font = `400 ${11 * world.S}px "PingFang SC","Microsoft YaHei",sans-serif`;
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fillText('点击屏幕继续', w / 2, cy + 34 * world.S);
-    ctx.restore();
-  };
 
   if (isMini) {
     try {
@@ -83,6 +65,7 @@ export function boot() {
         Audio.resume();
         if (paused) {
           paused = false;
+          world.paused = false;
           ui.setScene('play');
         }
       });
@@ -95,11 +78,8 @@ export function boot() {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  onPointer('down', (p) => {
-    if (ui.scene === 'paused') {
-      paused = false;
-      ui.setScene('play');
-    }
+  onPointer('down', () => {
+    if (paused && ui.scene !== 'paused') paused = false;
   });
 
   hideLoading();
@@ -165,7 +145,6 @@ export function boot() {
 
     // UI on top, unshaken
     ui.draw(ctx, world.t);
-    if (ui.scene === 'paused') drawPause(ctx, world.t);
 
     if (debug) {
       frames++;
